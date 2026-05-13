@@ -81,6 +81,41 @@ import pytest
             date(2025, 1, 1),
             date(2024, 2, 28),
         ),
+        (
+            "the day after tomorrow",
+            date(2025, 12, 1),
+            date(2025, 12, 3),
+        ),
+        (
+            "the day before yesterday",
+            date(2025, 12, 1),
+            date(2025, 11, 29),
+        ),
+        (
+            "the day after next Monday",
+            date(2025, 12, 1),
+            date(2025, 12, 9),
+        ),
+        (
+            "the day before next Monday",
+            date(2025, 12, 1),
+            date(2025, 12, 7),
+        ),
+        (
+            "the week after tomorrow",
+            date(2025, 12, 1),
+            date(2025, 12, 9),
+        ),
+        (
+            "the month before March 31, 2025",
+            date(2025, 1, 1),
+            date(2025, 2, 28),
+        ),
+        (
+            "the year after February 29 2024",
+            date(2025, 1, 1),
+            date(2025, 2, 28),
+        ),
     ],
 )
 def test_date_delta_expressions(text, today, expected):

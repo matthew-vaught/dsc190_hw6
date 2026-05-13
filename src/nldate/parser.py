@@ -108,15 +108,42 @@ _COUNT_RE = (
 )
 _OFFSET_RE = re.compile(
     rf"(?P<count>{_COUNT_RE})\s+(?:of\s+)?"
-    r"(?P<unit>hours?|days?|weeks?|months?|years?)"
+    r"(?P<unit>hours?|days?|fortnights?|weeks?|months?|years?)"
 )
 _OFFSET_SEPARATOR_RE = re.compile(r"^[\s,]*(?:and[\s,]*)?$")
 _IN_OFFSET_RE = re.compile(r"^in\s+(?P<offset>.+)$")
 _OFFSET_FROM_NOW_RE = re.compile(r"^(?P<offset>.+)\s+from\s+now$")
 _OFFSET_AGO_RE = re.compile(r"^(?P<offset>.+)\s+ago$")
+_IMPLICIT_DELTA_RE = re.compile(
+    r"^(?:the\s+)?(?P<unit>day|week|month|year)"
+    r"\s+(?P<direction>before|after)\s+(?P<base>.+)$"
+)
 _DELTA_RE = re.compile(
     r"^(?P<offset>.+?)\s+(?P<direction>before|after)\s+(?P<base>.+)$"
 )
+
+_RELATIVE_DAY_ALIASES = {
+    "tonight": 0,
+    "this morning": 0,
+    "this afternoon": 0,
+    "this evening": 0,
+    "the next day": 1,
+    "next day": 1,
+    "the following day": 1,
+    "following day": 1,
+    "overmorrow": 2,
+    "the day after tomorrow": 2,
+    "day after tomorrow": 2,
+    "the previous day": -1,
+    "previous day": -1,
+    "the prior day": -1,
+    "prior day": -1,
+    "ereyesterday": -2,
+    "the day before yesterday": -2,
+    "day before yesterday": -2,
+}
+
+_TIME_OF_DAY_SUFFIXES = (" morning", " afternoon", " evening", " night")
 
 
 def _normalize(s: str) -> str:
@@ -180,6 +207,9 @@ def _parse_absolute(s: str, today: date | None) -> date | None:
 
 
 def _parse_offset(s: str) -> tuple[int, int]:
+    if s == "fortnight":
+        return 0, 14
+
     months = 0
     days = 0
     matches = list(_OFFSET_RE.finditer(s))
@@ -194,6 +224,8 @@ def _parse_offset(s: str) -> tuple[int, int]:
             continue
         if unit == "day":
             days += count
+        elif unit == "fortnight":
+            days += count * 14
         elif unit == "week":
             days += count * 7
         elif unit == "month":
@@ -245,6 +277,49 @@ def _apply_offset(start: date, offset: str, sign: int) -> date:
     return result + timedelta(days=sign * days)
 
 
+def _strip_time_of_day_suffix(s: str) -> str | None:
+    for suffix in _TIME_OF_DAY_SUFFIXES:
+        if s.endswith(suffix):
+            return s[: -len(suffix)]
+    return None
+
+
+def _parse_period_shorthand(s: str, today: date) -> date | None:
+    for prefix, sign in (("next ", 1), ("last ", -1)):
+        if not s.startswith(prefix):
+            continue
+        unit = s.removeprefix(prefix)
+        if unit not in {"week", "month", "year", "fortnight"}:
+            return None
+        return _apply_offset(today, f"1 {unit}", sign)
+
+    return None
+
+
+def _parse_weekday_shorthand(s: str, today: date) -> date | None:
+    for prefix, direction, include_today in (
+        ("next ", 1, False),
+        ("this ", 1, True),
+        ("coming ", 1, True),
+        ("upcoming ", 1, True),
+        ("last ", -1, False),
+        ("previous ", -1, False),
+        ("past ", -1, False),
+    ):
+        if not s.startswith(prefix):
+            continue
+        weekday = WEEKDAYS.get(s.removeprefix(prefix))
+        if weekday is None:
+            return None
+        if direction == 1:
+            days = (weekday - today.weekday()) % 7
+            return today + timedelta(days=days if include_today else days or 7)
+        days = (today.weekday() - weekday) % 7
+        return today - timedelta(days=days or 7)
+
+    return None
+
+
 def _parse_relative(s: str, today: date) -> date | None:
     if s == "today":
         return today
@@ -252,6 +327,14 @@ def _parse_relative(s: str, today: date) -> date | None:
         return today + timedelta(days=1)
     if s == "yesterday":
         return today - timedelta(days=1)
+
+    day_alias = _RELATIVE_DAY_ALIASES.get(s)
+    if day_alias is not None:
+        return today + timedelta(days=day_alias)
+
+    period = _parse_period_shorthand(s, today)
+    if period is not None:
+        return period
 
     for pattern, sign in (
         (_IN_OFFSET_RE, 1),
@@ -262,18 +345,9 @@ def _parse_relative(s: str, today: date) -> date | None:
         if match is not None:
             return _apply_offset(today, match.group("offset"), sign)
 
-    for prefix, direction in (("next ", 1), ("last ", -1)):
-        if not s.startswith(prefix):
-            continue
-        weekday_name = s.removeprefix(prefix)
-        weekday = WEEKDAYS.get(weekday_name)
-        if weekday is None:
-            return None
-        days = (weekday - today.weekday()) % 7
-        if direction == 1:
-            return today + timedelta(days=days or 7)
-        days = (today.weekday() - weekday) % 7
-        return today - timedelta(days=days or 7)
+    weekday = _parse_weekday_shorthand(s, today)
+    if weekday is not None:
+        return weekday
 
     return None
 
@@ -285,6 +359,19 @@ def parse(s: str, today: date | None = None) -> date:
     """
     normalized = _normalize(s)
     reference = _resolve_today(today)
+
+    time_base = _strip_time_of_day_suffix(normalized)
+    if time_base is not None:
+        try:
+            return parse(time_base, today=reference)
+        except ValueError:
+            pass
+
+    implicit_delta_match = _IMPLICIT_DELTA_RE.fullmatch(normalized)
+    if implicit_delta_match is not None:
+        base = parse(implicit_delta_match.group("base"), today=reference)
+        sign = 1 if implicit_delta_match.group("direction") == "after" else -1
+        return _apply_offset(base, f"1 {implicit_delta_match.group('unit')}", sign)
 
     delta_match = _DELTA_RE.fullmatch(normalized)
     if delta_match is not None:
