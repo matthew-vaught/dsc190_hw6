@@ -71,7 +71,45 @@ _COMPACT_YEAR_FIRST_DATE_RE = re.compile(
     r"^(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})$"
 )
 
-_OFFSET_RE = re.compile(r"(?P<count>\d+)\s+(?P<unit>days?|weeks?|months?|years?)")
+_COUNT_WORDS = {
+    "zero": 0,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+    "twenty": 20,
+    "thirty": 30,
+    "forty": 40,
+    "fifty": 50,
+    "sixty": 60,
+    "seventy": 70,
+    "eighty": 80,
+    "ninety": 90,
+}
+_COUNT_WORD_RE = "|".join(_COUNT_WORDS)
+_COUNT_RE = (
+    rf"\d+|a\s+couple|couple|an?|"
+    rf"(?:{_COUNT_WORD_RE})(?:[-\s](?:{_COUNT_WORD_RE}))?"
+)
+_OFFSET_RE = re.compile(
+    rf"(?P<count>{_COUNT_RE})\s+(?:of\s+)?"
+    r"(?P<unit>hours?|days?|weeks?|months?|years?)"
+)
 _IN_OFFSET_RE = re.compile(r"^in\s+(?P<offset>.+)$")
 _OFFSET_FROM_NOW_RE = re.compile(r"^(?P<offset>.+)\s+from\s+now$")
 _OFFSET_AGO_RE = re.compile(r"^(?P<offset>.+)\s+ago$")
@@ -153,8 +191,10 @@ def _parse_offset(s: str) -> tuple[int, int]:
         raise ValueError(f"Unsupported date offset: {s!r}")
 
     for match in matches:
-        count = int(match.group("count"))
+        count = _parse_count(match.group("count"))
         unit = match.group("unit").rstrip("s")
+        if unit == "hour":
+            continue
         if unit == "day":
             days += count
         elif unit == "week":
@@ -165,6 +205,31 @@ def _parse_offset(s: str) -> tuple[int, int]:
             months += count * 12
 
     return months, days
+
+
+def _parse_count(count_text: str) -> int:
+    if count_text.isdecimal():
+        return int(count_text)
+
+    if count_text in {"a", "an"}:
+        return 1
+    if count_text in {"couple", "a couple"}:
+        return 2
+
+    words = count_text.replace("-", " ").split()
+    values = []
+    for word in words:
+        value = _COUNT_WORDS.get(word)
+        if value is None:
+            raise ValueError(f"Unsupported date offset count: {count_text!r}")
+        values.append(value)
+
+    if len(values) == 1:
+        return values[0]
+    if len(values) == 2 and 20 <= values[0] <= 90 and 1 <= values[1] <= 9:
+        return values[0] + values[1]
+
+    raise ValueError(f"Unsupported date offset count: {count_text!r}")
 
 
 def _apply_offset(start: date, offset: str, sign: int) -> date:

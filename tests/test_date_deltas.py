@@ -36,6 +36,26 @@ import pytest
             date(2025, 1, 1),
             date(2025, 2, 28),
         ),
+        (
+            "a week before December 1st, 2025",
+            date(2025, 6, 15),
+            date(2025, 11, 24),
+        ),
+        (
+            "two months after yesterday",
+            date(2025, 12, 1),
+            date(2026, 1, 30),
+        ),
+        (
+            "a couple of weeks after January 31, 2025",
+            date(2025, 1, 1),
+            date(2025, 2, 14),
+        ),
+        (
+            "an hour before tomorrow",
+            date(2025, 12, 1),
+            date(2025, 12, 2),
+        ),
     ],
 )
 def test_date_delta_expressions(text, today, expected):
