@@ -56,6 +56,31 @@ import pytest
             date(2025, 12, 1),
             date(2025, 12, 2),
         ),
+        (
+            "2 years, 3 months before Dec. 1, 2025",
+            date(2025, 6, 15),
+            date(2023, 9, 1),
+        ),
+        (
+            "2 years,3 months before Dec. 1, 2025",
+            date(2025, 6, 15),
+            date(2023, 9, 1),
+        ),
+        (
+            "1 year, 2 months, and 3 days after Dec. 1, 2025",
+            date(2025, 6, 15),
+            date(2027, 2, 4),
+        ),
+        (
+            "one year, two months after yesterday",
+            date(2025, 12, 1),
+            date(2027, 1, 30),
+        ),
+        (
+            "a year, a month, and a day before March 31, 2025",
+            date(2025, 1, 1),
+            date(2024, 2, 28),
+        ),
     ],
 )
 def test_date_delta_expressions(text, today, expected):

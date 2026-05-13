@@ -110,6 +110,7 @@ _OFFSET_RE = re.compile(
     rf"(?P<count>{_COUNT_RE})\s+(?:of\s+)?"
     r"(?P<unit>hours?|days?|weeks?|months?|years?)"
 )
+_OFFSET_SEPARATOR_RE = re.compile(r"^[\s,]*(?:and[\s,]*)?$")
 _IN_OFFSET_RE = re.compile(r"^in\s+(?P<offset>.+)$")
 _OFFSET_FROM_NOW_RE = re.compile(r"^(?P<offset>.+)\s+from\s+now$")
 _OFFSET_AGO_RE = re.compile(r"^(?P<offset>.+)\s+ago$")
@@ -184,11 +185,7 @@ def _parse_offset(s: str) -> tuple[int, int]:
     matches = list(_OFFSET_RE.finditer(s))
     if not matches:
         raise ValueError(f"Unsupported date offset: {s!r}")
-
-    leftover = _OFFSET_RE.sub("", s)
-    leftover = leftover.replace("and", "").strip()
-    if leftover:
-        raise ValueError(f"Unsupported date offset: {s!r}")
+    _validate_offset_separators(s, matches)
 
     for match in matches:
         count = _parse_count(match.group("count"))
@@ -205,6 +202,16 @@ def _parse_offset(s: str) -> tuple[int, int]:
             months += count * 12
 
     return months, days
+
+
+def _validate_offset_separators(s: str, matches: list[re.Match[str]]) -> None:
+    if s[: matches[0].start()].strip() or s[matches[-1].end() :].strip():
+        raise ValueError(f"Unsupported date offset: {s!r}")
+
+    for previous, current in zip(matches, matches[1:]):
+        separator = s[previous.end() : current.start()]
+        if _OFFSET_SEPARATOR_RE.fullmatch(separator) is None:
+            raise ValueError(f"Unsupported date offset: {s!r}")
 
 
 def _parse_count(count_text: str) -> int:
