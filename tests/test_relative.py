@@ -63,7 +63,11 @@ import pytest
         ("in a couple of weeks", date(2025, 12, 1), date(2025, 12, 15)),
         ("in one month and two weeks", date(2025, 1, 31), date(2025, 3, 14)),
         ("in one month, two weeks", date(2025, 1, 31), date(2025, 3, 14)),
-        ("in one month, two weeks, and three days", date(2025, 1, 31), date(2025, 3, 17)),
+        (
+            "in one month, two weeks, and three days",
+            date(2025, 1, 31),
+            date(2025, 3, 17),
+        ),
         ("in a year and a day", date(2024, 2, 29), date(2025, 3, 1)),
         ("3 days from now", date(2025, 12, 1), date(2025, 12, 4)),
         ("1 day from now", date(2025, 12, 1), date(2025, 12, 2)),
