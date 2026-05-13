@@ -72,9 +72,9 @@ _COMPACT_YEAR_FIRST_DATE_RE = re.compile(
 )
 
 _OFFSET_RE = re.compile(r"(?P<count>\d+)\s+(?P<unit>days?|weeks?|months?|years?)")
-_IN_DAYS_RE = re.compile(r"^in\s+(?P<count>\d+)\s+days?$")
-_DAYS_FROM_NOW_RE = re.compile(r"^(?P<count>\d+)\s+days?\s+from\s+now$")
-_WEEKS_AGO_RE = re.compile(r"^(?P<count>\d+)\s+weeks?\s+ago$")
+_IN_OFFSET_RE = re.compile(r"^in\s+(?P<offset>.+)$")
+_OFFSET_FROM_NOW_RE = re.compile(r"^(?P<offset>.+)\s+from\s+now$")
+_OFFSET_AGO_RE = re.compile(r"^(?P<offset>.+)\s+ago$")
 _DELTA_RE = re.compile(
     r"^(?P<offset>.+?)\s+(?P<direction>before|after)\s+(?P<base>.+)$"
 )
@@ -181,17 +181,14 @@ def _parse_relative(s: str, today: date) -> date | None:
     if s == "yesterday":
         return today - timedelta(days=1)
 
-    match = _IN_DAYS_RE.fullmatch(s)
-    if match is not None:
-        return today + timedelta(days=int(match.group("count")))
-
-    match = _DAYS_FROM_NOW_RE.fullmatch(s)
-    if match is not None:
-        return today + timedelta(days=int(match.group("count")))
-
-    match = _WEEKS_AGO_RE.fullmatch(s)
-    if match is not None:
-        return today - timedelta(weeks=int(match.group("count")))
+    for pattern, sign in (
+        (_IN_OFFSET_RE, 1),
+        (_OFFSET_FROM_NOW_RE, 1),
+        (_OFFSET_AGO_RE, -1),
+    ):
+        match = pattern.fullmatch(s)
+        if match is not None:
+            return _apply_offset(today, match.group("offset"), sign)
 
     for prefix, direction in (("next ", 1), ("last ", -1)):
         if not s.startswith(prefix):
