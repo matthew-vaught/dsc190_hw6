@@ -47,6 +47,7 @@ _ABSOLUTE_DATE_RE = re.compile(
     r"(?P<day>\d{1,2})(?:st|nd|rd|th)?"
     r"(?:,?\s+(?P<year>\d{4}))?$"
 )
+_ISO_DATE_RE = re.compile(r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})$")
 
 _OFFSET_RE = re.compile(r"(?P<count>\d+)\s+(?P<unit>days?|weeks?|months?|years?)")
 _IN_DAYS_RE = re.compile(r"^in\s+(?P<count>\d+)\s+days?$")
@@ -74,6 +75,14 @@ def _add_months(start: date, months: int) -> date:
 
 
 def _parse_absolute(s: str, today: date | None) -> date | None:
+    iso_match = _ISO_DATE_RE.fullmatch(s)
+    if iso_match is not None:
+        return date(
+            int(iso_match.group("year")),
+            int(iso_match.group("month")),
+            int(iso_match.group("day")),
+        )
+
     match = _ABSOLUTE_DATE_RE.fullmatch(s)
     if match is None:
         return None

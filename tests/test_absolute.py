@@ -15,6 +15,7 @@ def test_straightforward_date():
         ("December 1, 2025", date(2025, 12, 1)),
         ("jan 31 2025", date(2025, 1, 31)),
         ("July 4th 2026", date(2026, 7, 4)),
+        ("2025-12-04", date(2025, 12, 4)),
     ],
 )
 def test_absolute_dates_with_explicit_year(text, expected):
