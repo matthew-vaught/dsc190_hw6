@@ -43,11 +43,33 @@ WEEKDAYS = {
 }
 
 _ABSOLUTE_DATE_RE = re.compile(
-    r"^(?P<month>[a-z]+)\s+"
+    r"^(?P<month>[a-z]+)\.?\s+"
     r"(?P<day>\d{1,2})(?:st|nd|rd|th)?"
     r"(?:,?\s+(?P<year>\d{4}))?$"
 )
-_ISO_DATE_RE = re.compile(r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})$")
+_DAY_MONTH_DATE_RE = re.compile(
+    r"^(?P<day>\d{1,2})(?:st|nd|rd|th)?\s+"
+    r"(?P<month>[a-z]+)\.?"
+    r"(?:,?\s+(?P<year>\d{4}))?$"
+)
+_YEAR_MONTH_DATE_RE = re.compile(
+    r"^(?P<year>\d{4})\s+"
+    r"(?P<month>[a-z]+)\.?\s+"
+    r"(?P<day>\d{1,2})(?:st|nd|rd|th)?$"
+)
+_YEAR_FIRST_DATE_RE = re.compile(
+    r"^(?P<year>\d{4})(?P<separator>[-/.\s])"
+    r"(?P<month>\d{1,2})(?P=separator)"
+    r"(?P<day>\d{1,2})$"
+)
+_US_NUMERIC_DATE_RE = re.compile(
+    r"^(?P<month>\d{1,2})(?P<separator>[-/.])"
+    r"(?P<day>\d{1,2})(?P=separator)"
+    r"(?P<year>\d{4})$"
+)
+_COMPACT_YEAR_FIRST_DATE_RE = re.compile(
+    r"^(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})$"
+)
 
 _OFFSET_RE = re.compile(r"(?P<count>\d+)\s+(?P<unit>days?|weeks?|months?|years?)")
 _IN_DAYS_RE = re.compile(r"^in\s+(?P<count>\d+)\s+days?$")
@@ -74,27 +96,48 @@ def _add_months(start: date, months: int) -> date:
     return date(year, month, min(start.day, last_day))
 
 
-def _parse_absolute(s: str, today: date | None) -> date | None:
-    iso_match = _ISO_DATE_RE.fullmatch(s)
-    if iso_match is not None:
-        return date(
-            int(iso_match.group("year")),
-            int(iso_match.group("month")),
-            int(iso_match.group("day")),
-        )
+def _month_number(month_name: str) -> int | None:
+    return MONTHS.get(month_name.rstrip("."))
 
-    match = _ABSOLUTE_DATE_RE.fullmatch(s)
-    if match is None:
+
+def _date_from_match(match: re.Match[str]) -> date | None:
+    month_text = match.group("month")
+    month = int(month_text) if month_text.isdecimal() else _month_number(month_text)
+    if month is None:
         return None
+    return date(int(match.group("year")), month, int(match.group("day")))
 
-    month_name = match.group("month")
-    month = MONTHS.get(month_name)
+
+def _date_from_named_match(match: re.Match[str], today: date | None) -> date | None:
+    month = _month_number(match.group("month"))
     if month is None:
         return None
 
     year_text = match.group("year")
     year = int(year_text) if year_text is not None else _resolve_today(today).year
     return date(year, month, int(match.group("day")))
+
+
+def _parse_absolute(s: str, today: date | None) -> date | None:
+    for pattern in (
+        _YEAR_FIRST_DATE_RE,
+        _US_NUMERIC_DATE_RE,
+        _COMPACT_YEAR_FIRST_DATE_RE,
+    ):
+        match = pattern.fullmatch(s)
+        if match is not None:
+            return _date_from_match(match)
+
+    for pattern in (
+        _ABSOLUTE_DATE_RE,
+        _DAY_MONTH_DATE_RE,
+        _YEAR_MONTH_DATE_RE,
+    ):
+        match = pattern.fullmatch(s)
+        if match is not None:
+            return _date_from_named_match(match, today)
+
+    return None
 
 
 def _parse_offset(s: str) -> tuple[int, int]:
